@@ -1,0 +1,203 @@
+---
+title: "Machine Learning - Activity Data"
+author: "Aadil Rai Mehra"
+date: "23 November 2014"
+output: html_document
+---
+
+Executive Summary 
+-----------------
+The purpose of this project is to predict the manner in which 6 test participants did the specified exercise, based on data from accelerometers on the belt, forearm, arm, and dumbell of the 6 participants. Once we have finalised a model, we are required to predict the classe for 20 new observations in the testing dataset provided separately.
+
+
+Machine Learning Methodology
+-----------------------------
+In order to do this, I first used modelling wiht trees. However, the model did not seem to give accurate results on the training data itself. In particular, the model could not correctly classify the classe D observations.
+
+Thus, I have used the random forest method on a selected group of variables. I have verified the outcome of the model at 2 levels:   
+* by splitting the given training data into training and testing and using the testing data to confirm the accuracy of the model.   
+* by using k-folds cross validation in order to ensure that the outcome of the model is not affected by the specific set of observations used in the model.   
+
+I also used the boosting technique to compare the results i obtained from the random forest method. However, there was no significant improvement, as the random forest method was already classifying the data with approximately 99% accuracy. Therefore, in the interest of keeping this report short i have not reproduced the boosting technique code here.
+
+The final model is simply a random forest method of forecasting based on 100% of the training data.
+
+
+Data Cleaning and Pre-processing
+---------------------------------
+The original dataset gives details from the accelerometers along with other aggregated variables like skewness, kurtosis, avg, etc. calculated for subsets of the data. Therefore the first step of developing a machine learning algorithm would involve choosing the variables which can potentially be used to predict the classe.
+
+Of the 160 variables given in the dataset, I am only considering the columns that have data for all the observations,i.e, I am ignoring the aggregated variables such as max, min, skewness, kurtosis, std,dev, var, avg and amplitude. 
+I then also split the given training data into a training and testing data set based on a 60:40 ratio.
+
+```{r, echo=FALSE, results='hide', message=FALSE,warning=FALSE}
+setwd("~/Desktop/Coursera/8.Machine Learning")
+data1<- download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv", "testing.csv", method="curl")
+data2<- download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", "training.csv", method="curl")
+training <- read.csv("training.csv")
+testing <- read.csv("testing.csv")
+library(caret)
+```
+
+```{r, echo=TRUE}
+required <- c(8:10, 37:48, 60:68, 84:86, 113:124, 151:160)
+required.training <- training[ , required]
+
+set.seed(777)
+training.60 <- createDataPartition (required.training$classe, p=0.6, list=FALSE)
+required.training.60 <- required.training[training.60, ]
+required.testing.40 <- required.training[ -training.60, ]
+```
+
+
+Modelling with Trees
+---------------------
+
+```{r, echo=FALSE, message=FALSE}
+model <- train (classe ~ . , data = required.training.60, method="rpart")
+fitted.training.60 <- predict(model, required.training.60)
+
+par(mar=c(4,2,3,2))
+plot(model$finalModel, uniform=TRUE, main="Classification Tree")
+text(model$finalModel, use.n=TRUE, all=TRUE, cex=0.7)
+
+fitted.summarytable <- table(fitted.training.60, required.training.60$classe)
+print (fitted.summarytable)
+
+```
+
+The classifcation tree and summary table highlight the fact that the tree is y=unable to find a suitable parameter to predict classe D observations. Therefore, I need to use Random Forests (with / without boosting) to improve the predictions.
+
+Modelling with Random Forests
+-------------------------------
+
+```{r, message=FALSE, warning=FALSE}
+library(randomForest)
+model1 <- randomForest (classe ~ . , data = required.training.60)
+fitted.training.60 <- predict(model1, required.training.60)
+table(fitted.training.60, required.training.60$classe)
+
+predicted.testing.40 <- predict(model1, required.testing.40)
+table(predicted.testing.40, required.testing.40$classe)
+```
+
+The initial model using random forests shows 100% accuracy in the training data. Using the same model to predict the classe in the testing dataset gives incorrect results for 59 / 7846 observations. 
+
+In order to check for over-fitting and to know the overall accuracy of the model under different datasets, I proceeded with a k-fold cross validation of the data.
+
+Cross Validation of the Data
+-----------------------------
+
+While cross validating the results using k-fold classification, i have set k=10, implying that 10% of the data is used to test the model generated at each fold. 
+
+```{r}
+
+set.seed(77)
+required.training.folds <- createFolds(required.training$classe, k=10, list=TRUE, returnTrain = TRUE)
+sapply(required.training.folds, length)
+
+set.seed(77)
+required.testing.folds <- createFolds(required.training$classe, k=10, list=TRUE, returnTrain = FALSE)
+sapply(required.testing.folds, length)
+```
+
+```{r, echo=FALSE}
+training.fold1 <- required.training[required.training.folds[[1]], ]
+training.fold2 <- required.training[required.training.folds[[2]], ]
+training.fold3 <- required.training[required.training.folds[[3]], ]
+training.fold4 <- required.training[required.training.folds[[4]], ]
+training.fold5 <- required.training[required.training.folds[[5]], ]
+training.fold6 <- required.training[required.training.folds[[6]], ]
+training.fold7 <- required.training[required.training.folds[[7]], ]
+training.fold8 <- required.training[required.training.folds[[8]], ]
+training.fold9 <- required.training[required.training.folds[[9]], ]
+training.fold10 <- required.training[required.training.folds[[10]], ]
+
+testing.fold1 <- required.training[required.testing.folds[[1]], ]
+testing.fold2 <- required.training[required.testing.folds[[2]], ]
+testing.fold3 <- required.training[required.testing.folds[[3]], ]
+testing.fold4 <- required.training[required.testing.folds[[4]], ]
+testing.fold5 <- required.training[required.testing.folds[[5]], ]
+testing.fold6 <- required.training[required.testing.folds[[6]], ]
+testing.fold7 <- required.training[required.testing.folds[[7]], ]
+testing.fold8 <- required.training[required.testing.folds[[8]], ]
+testing.fold9 <- required.training[required.testing.folds[[9]], ]
+testing.fold10 <- required.training[required.testing.folds[[10]], ]
+
+modelf1 <- randomForest (classe ~ . , data = training.fold1)
+predicted.testing.fold1 <- predict(modelf1, testing.fold1)
+tablef1 <- table(predicted.testing.fold1, testing.fold1$classe)
+
+modelf2 <- randomForest (classe ~ . , data = training.fold2)
+predicted.testing.fold2 <- predict(modelf2, testing.fold2)
+tablef2 <- table(predicted.testing.fold2, testing.fold2$classe)
+
+modelf3 <- randomForest (classe ~ . , data = training.fold3)
+predicted.testing.fold3 <- predict(modelf3, testing.fold3)
+tablef3 <- table(predicted.testing.fold3, testing.fold3$classe)
+
+modelf4 <- randomForest (classe ~ . , data = training.fold4)
+predicted.testing.fold4 <- predict(modelf4, testing.fold4)
+tablef4 <- table(predicted.testing.fold4, testing.fold4$classe)
+
+modelf5 <- randomForest (classe ~ . , data = training.fold5)
+predicted.testing.fold5 <- predict(modelf5, testing.fold5)
+tablef5 <- table(predicted.testing.fold5, testing.fold5$classe)
+
+modelf6 <- randomForest (classe ~ . , data = training.fold6)
+predicted.testing.fold6 <- predict(modelf6, testing.fold6)
+tablef6 <- table(predicted.testing.fold6, testing.fold6$classe)
+
+modelf7 <- randomForest (classe ~ . , data = training.fold7)
+predicted.testing.fold7 <- predict(modelf7, testing.fold7)
+tablef7 <- table(predicted.testing.fold7, testing.fold7$classe)
+
+modelf8 <- randomForest (classe ~ . , data = training.fold8)
+predicted.testing.fold8 <- predict(modelf8, testing.fold8)
+tablef8 <- table(predicted.testing.fold8, testing.fold8$classe)
+
+modelf9 <- randomForest (classe ~ . , data = training.fold9)
+predicted.testing.fold9 <- predict(modelf9, testing.fold9)
+tablef9 <- table(predicted.testing.fold9, testing.fold9$classe)
+
+modelf10 <- randomForest (classe ~ . , data = training.fold10)
+predicted.testing.fold10 <- predict(modelf10, testing.fold10)
+tablef10 <- table(predicted.testing.fold10, testing.fold10$classe)
+```
+
+```{r}
+summarytable <- tablef1 + tablef2 + tablef3 + tablef4 + tablef5 + tablef6 + tablef7 + tablef8 + tablef9 + tablef10
+print(summarytable)
+
+normalised.summarytable <- scale (summarytable, center=FALSE, scale=colSums(summarytable))
+print(normalised.summarytable)
+
+```
+
+The 10-fold cross validation shows that the random forest model is able to correctly predict all the classes more than 99% of the times. At the same time, it is also evident from the 10-fold cross validation that as we increased the data in the training set from 60% to 90%, the variability has decreased, but the potential bias has increased. 
+
+
+Final Model
+------------
+```{r}
+finalmodel <- randomForest (classe ~ . , data = required.training)
+finalmodel
+```
+
+The final model shows an error rate of 0.25% in estimating the classes. Allowing for a possible increase in this error rate when using the testing dataset, the error rate should still be under 1%. 
+
+
+Predicting the Test Sets
+-------------------------
+
+```{r}
+predicted.testing <- predict(finalmodel, testing)
+answers <- predicted.testing
+print(answers)
+```
+
+
+References
+-----------
+http://groupware.les.inf.puc-rio.br/har
+ 
